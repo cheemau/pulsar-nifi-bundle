@@ -92,40 +92,40 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
     }
 
     protected void doFailedParseHandlingTest(String msg, String topic, String sub, boolean async) throws Exception {
-        final String failingReaderId = "failing-record-reader";
-        readerService = new MockRecordParser(-1);
-        readerService.addSchemaField("name", RecordFieldType.STRING);
-        readerService.addSchemaField("age", RecordFieldType.INT);
-        runner.addControllerService(failingReaderId, readerService);
-        runner.enableControllerService(readerService);
-
-        runner.setProperty(RECORD_READER, failingReaderId);
-
-        runner.setProperty(ConsumePulsarRecord.ASYNC_ENABLED, Boolean.toString(async));
-        runner.setProperty(ConsumePulsarRecord.TOPICS, topic);
-        runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, sub);
-        runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, 2 + "");
-        runner.setProperty(ConsumePulsarRecord.MESSAGE_DEMARCATOR, "***");
-        runner.setProperty(ConsumePulsar.SUBSCRIPTION_TYPE, "Exclusive");
-
-        if (async) {
-            runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
-        } else {
-            runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
-        }
-
-        when(mockMessage.getData()).thenReturn(msg.getBytes());
+    	final String failingReaderId = "failing-record-reader";
+    	readerService = new MockRecordParser(-1);
+    	readerService.addSchemaField("name",  RecordFieldType.STRING);
+    	readerService.addSchemaField("age",  RecordFieldType.INT);
+    	runner.addControllerService(failingReaderId, readerService);
+    	runner.enableControllerService(readerService);
+    	
+    	runner.setProperty(RECORD_READER, failingReaderId);
+    	
+    	runner.setProperty(ConsumePulsarRecord.ASYNC_ENABLED, Boolean.toString(async));
+    	runner.setProperty(ConsumePulsarRecord.TOPICS, topic);
+    	runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, sub);
+    	runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, 2 + "");
+    	runner.setProperty(ConsumePulsarRecord.MESSAGE_DEMARCATOR, "***");
+    	runner.setProperty(ConsumePulsar.SUBSCRIPTION_TYPE, "Exclusive");
+    	
+    	if (async) {
+    		runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
+    	} else {
+    		runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
+    	}
+    	
+    	when(mockMessage.getData()).thenReturn(msg.getBytes());
         when(mockMessage.getTopicName()).thenReturn("foo");
 
         mockClientService.setMockMessage(mockMessage);
-
-        runner.run();
-        runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_PARSE_FAILURE);
-        runner.assertQueueEmpty();
-
-        List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_PARSE_FAILURE);
-        assertEquals(1, flowFiles.size());
-        flowFiles.get(0).assertContentEquals(msg + "***" + msg);
+    	
+    	runner.run();
+    	runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_PARSE_FAILURE);
+    	runner.assertQueueEmpty();
+    	
+    	List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_PARSE_FAILURE);
+    	assertEquals(1, flowFiles.size());
+    	flowFiles.get(0).assertContentEquals(msg + "***" + msg);
     }
 
     protected List<MockFlowFile> sendMessages(String msg, boolean async, int iterations) throws PulsarClientException {
@@ -141,9 +141,9 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
     }
 
     protected List<MockFlowFile> sendMessages(String msg, String topic, String sub, boolean async, int iterations, int batchSize) throws PulsarClientException {
-        return sendMessages(msg, topic, sub, async, iterations, batchSize, "Exclusive");
+    	return sendMessages(msg, topic, sub, async, iterations, batchSize, "Exclusive");
     }
-
+    
     protected List<MockFlowFile> sendMessages(String msg, String topic, String sub, boolean async, int iterations, int batchSize, String subType) throws PulsarClientException {
         when(mockMessage.getData()).thenReturn(msg.getBytes());
         when(mockMessage.getTopicName()).thenReturn(topic);
@@ -154,11 +154,11 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, sub);
         runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, batchSize + "");
         runner.setProperty(ConsumePulsar.SUBSCRIPTION_TYPE, subType);
-
+        
         if (async) {
-            runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
+          runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
         } else {
-            runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
+          runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
         }
 
         runner.run(iterations, true);
@@ -170,21 +170,22 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).receive(0, TimeUnit.SECONDS);
 
         boolean shared = isSharedSubType(subType);
-
+        
         if (shared) {
-            if (async) {
-                verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledgeAsync(mockMessage);
-            } else {
-                verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledge(mockMessage);
-            }
-        } else {
-            if (async) {
-                verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulativeAsync(mockMessage);
-            } else {
-                verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulative(mockMessage);
-            }
+        	if (async) {
+        		verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledgeAsync(mockMessage);
+        	} else {
+        		verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledge(mockMessage);
+        	}
         }
-
+        else {
+        	if (async) {
+        		verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulativeAsync(mockMessage);
+        	} else {
+        		verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulative(mockMessage);
+        	}
+        }
+        
         return flowFiles;
     }
 
