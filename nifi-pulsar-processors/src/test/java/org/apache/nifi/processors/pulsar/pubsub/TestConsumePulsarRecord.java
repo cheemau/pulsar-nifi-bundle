@@ -189,10 +189,10 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         return flowFiles;
     }
 
-    private static Message<GenericRecord> createTestMessage(byte[] data, String key, Map<String, String> props) {
+    private static Message<GenericRecord> createTestMessage(byte[] data, String key, Map<String, String> properties) {
         Message mockA = mock(Message.class);
         when(mockA.getData()).thenReturn(data);
-        props.entrySet().forEach(e ->
+        properties.entrySet().forEach(e ->
                 when(mockA.getProperty(e.getKey())).thenReturn(e.getValue())
         );
         when(mockA.getKey()).thenReturn(key);
@@ -223,28 +223,27 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_SUCCESS);
         assertEquals(3, flowFiles.size());
 
-        // first flow file should have A, second should have B
-        MockFlowFile flowFileWithA = flowFiles.get(0);
-        assertEquals("\"A\",\"10\"\n\"B\",\"10\"\n", flowFileWithA.getContent());
-        flowFileWithA.assertAttributeNotExists("prop");
-        flowFileWithA.assertAttributeNotExists("key");
+        // first flow file should have A and B (properties and key is the same)
+        flowFiles.get(0).assertContentEquals("\"A\",\"10\"\n\"B\",\"10\"\n");
+        flowFiles.get(0).assertAttributeNotExists("prop");
+        flowFiles.get(0).assertAttributeNotExists("key");
 
-        MockFlowFile flowFileWithC = flowFiles.get(1);
-        assertEquals("\"C\",\"10\"\n", flowFileWithC.getContent());
-        flowFileWithC.assertAttributeEquals("prop", "val");
-        flowFileWithC.assertAttributeNotExists("key");
+        //C is separate -> property changed
+        flowFiles.get(1).assertContentEquals("\"C\",\"10\"\n");
+        flowFiles.get(1).assertAttributeEquals("prop", "val");
+        flowFiles.get(1).assertAttributeNotExists("key");
 
-        MockFlowFile flowFileWithD = flowFiles.get(2);
-        assertEquals(flowFileWithD.getContent(), "\"D\",\"10\"\n");
-
-        flowFileWithD.assertAttributeEquals("prop", "val");
-        flowFileWithD.assertAttributeEquals("key", "K");
+        //D is separate -> key changed
+        flowFiles.get(2).assertContentEquals("\"D\",\"10\"\n");
+        flowFiles.get(2).assertAttributeEquals("prop", "val");
+        flowFiles.get(2).assertAttributeEquals("key", "K");
     }
 
-    //TODO multi-topic, multi-message with various attributes
+    //TODO multi-topic, multi-message with various properties
 
-    //TODO tests with various schemas: protobuf, json, avro - for avro: we should check if schema is extracted into a
-    //     property, the rest just should not blow up for now
+    //TODO tests with various schemas: protobuf, json, avro
+    //     for avro: we should check if schema is extracted into a property
+    //     the rest just should not blow up for now
 
     //TODO changing avro schema in the same topic, mixing attributes -> will be it grouped properly, and schema extracted properly?
 
