@@ -312,6 +312,8 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<Generic
                         isFirstMessage = false;
                     }
 
+                    //TODO - discuss: we have't committed the flowfile yet, why do we commit to Pulsar? we should do after we have committed the flowfiles
+                    //    this should come after we have committed the session
                     if (shared) {
                         acknowledge(consumer, message, async);
                     }
@@ -335,17 +337,68 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<Generic
                     flowFile = session.putAttribute(flowFile, MSG_COUNT, Integer.toString(result.getRecordCount()));
                     session.getProvenanceReporter().receive(flowFile, getPulsarClientService().getPulsarBrokerRootURL() + "/" + consumer.getTopic());
                     session.transfer(flowFile, REL_SUCCESS);
+
+                    //TODO we should flush failures as well, so this commit will flush those out as well so if there is a crash we'd lose the failure messages,
+                    // but we confirm original source messages to Pulsar
+
+                    //TODO - discuss: we should do a commit on the flowfiles - making sure we have written the changes, before we ack for Pulsar
+                    // https://stackoverflow.com/questions/39446385/when-to-session-commit-in-a-nifi-processor
+                    // by default the superclass commits, but only after this processor finished, i.e. it commits the flowfile (in an async way!!!) only after
+                    // we already acked pulsar, so if there is a local issue, Pulsar will think we have that message
+                    // Note: this proposed commit flow (1st session, then kafka) is what nifi kafka connector does as well:
+                    //       https://github.com/apache/nifi/blob/main/nifi-nar-bundles/nifi-kafka-bundle/nifi-kafka-2-6-processors/src/main/java/org/apache/nifi/processors/kafka/pubsub/ConsumerLease.java#L284C41-L294
+                    // e.g.:
+                    // should async property drive this?
+//                    session.commitAsync(()->{
+//                        if (shared) {
+//                            messageList.forEach(message -> {
+//                                    try {
+//                                        acknowledge(consumer, message, async);
+//                                    } catch (PulsarClientException e) {
+//                                        //TODO how to handle? failure? log? crash?
+//                                        throw new RuntimeException(e);
+//                                    }
+//                                }
+//                            );
+//                        }
+//                    });
                 } else {
+                    //TODO why do we carry on processing the next batch of record and then finally committing?
+                    // shall we transfer the stuff to a FAILURE output?
+
                     // We were able to parse the records, but unable to write them to the FlowFile
                     session.rollback();
                 }
             }
         } catch (IOException e) {
+            //TODO discuss: should not we do something as well?
+            //     also this might cover other IOExceptions as well?
             getLogger().error("Unable to consume from Pulsar topic ", e);
         }
 
+        //TODO this should happen in the inner loop
         handleFailures(session, parseFailures, demarcator);
 
+        //TODO - discuss: probably we should commit to flowfile store first (previous commits might have committed all flowfiles already):
+        //   Q: if there is:
+        //     batchA: session.commitAsync(() -> A())
+        //     batchB: session.commitAsync(() -> B())
+        //     batchC: session.commitAsync(() -> C())
+        //  is C guaranteed to happen after B, and B after A ? or at least after the previous commits happened in the flowfile? (if so below commit will be a noop, but it will do
+        //  the cumulative ack() to Pulsar)
+        //  what if we don't use cumulative acks at all - having a simpler logic to acknowledge in chunks
+
+        //TODO should async property drive this?
+//        session.commitAsync(()->{
+//            if (!shared) {
+//                try {
+//                    acknowledgeCumulative(consumer, messages.get(messages.size() - 1), async);
+//                } catch (PulsarClientException e) {
+//                    //TODO how to handle? failure? log? crash?
+//                    throw new RuntimeException(e);
+//                }
+//            }
+//        });
         if (!shared) {
             acknowledgeCumulative(consumer, messages.get(messages.size() - 1), async);
         }
