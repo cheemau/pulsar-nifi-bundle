@@ -92,40 +92,40 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
     }
 
     protected void doFailedParseHandlingTest(String msg, String topic, String sub, boolean async) throws Exception {
-        final String failingReaderId = "failing-record-reader";
-        readerService = new MockRecordParser(-1);
-        readerService.addSchemaField("name", RecordFieldType.STRING);
-        readerService.addSchemaField("age", RecordFieldType.INT);
-        runner.addControllerService(failingReaderId, readerService);
-        runner.enableControllerService(readerService);
-
-        runner.setProperty(RECORD_READER, failingReaderId);
-
-        runner.setProperty(ConsumePulsarRecord.ASYNC_ENABLED, Boolean.toString(async));
-        runner.setProperty(ConsumePulsarRecord.TOPICS, topic);
-        runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, sub);
-        runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, 2 + "");
-        runner.setProperty(ConsumePulsarRecord.MESSAGE_DEMARCATOR, "***");
-        runner.setProperty(ConsumePulsar.SUBSCRIPTION_TYPE, "Exclusive");
-
-        if (async) {
-            runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
-        } else {
-            runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
-        }
-
-        when(mockMessage.getData()).thenReturn(msg.getBytes());
+    	final String failingReaderId = "failing-record-reader";
+    	readerService = new MockRecordParser(-1);
+    	readerService.addSchemaField("name",  RecordFieldType.STRING);
+    	readerService.addSchemaField("age",  RecordFieldType.INT);
+    	runner.addControllerService(failingReaderId, readerService);
+    	runner.enableControllerService(readerService);
+    	
+    	runner.setProperty(RECORD_READER, failingReaderId);
+    	
+    	runner.setProperty(ConsumePulsarRecord.ASYNC_ENABLED, Boolean.toString(async));
+    	runner.setProperty(ConsumePulsarRecord.TOPICS, topic);
+    	runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, sub);
+    	runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, 2 + "");
+    	runner.setProperty(ConsumePulsarRecord.MESSAGE_DEMARCATOR, "***");
+    	runner.setProperty(ConsumePulsar.SUBSCRIPTION_TYPE, "Exclusive");
+    	
+    	if (async) {
+    		runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
+    	} else {
+    		runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
+    	}
+    	
+    	when(mockMessage.getData()).thenReturn(msg.getBytes());
         when(mockMessage.getTopicName()).thenReturn("foo");
 
         mockClientService.setMockMessage(mockMessage);
-
-        runner.run();
-        runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_PARSE_FAILURE);
-        runner.assertQueueEmpty();
-
-        List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_PARSE_FAILURE);
-        assertEquals(1, flowFiles.size());
-        flowFiles.get(0).assertContentEquals(msg + "***" + msg);
+    	
+    	runner.run();
+    	runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_PARSE_FAILURE);
+    	runner.assertQueueEmpty();
+    	
+    	List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_PARSE_FAILURE);
+    	assertEquals(1, flowFiles.size());
+    	flowFiles.get(0).assertContentEquals(msg + "***" + msg);
     }
 
     protected List<MockFlowFile> sendMessages(String msg, boolean async, int iterations) throws PulsarClientException {
@@ -141,9 +141,9 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
     }
 
     protected List<MockFlowFile> sendMessages(String msg, String topic, String sub, boolean async, int iterations, int batchSize) throws PulsarClientException {
-        return sendMessages(msg, topic, sub, async, iterations, batchSize, "Exclusive");
+    	return sendMessages(msg, topic, sub, async, iterations, batchSize, "Exclusive");
     }
-
+    
     protected List<MockFlowFile> sendMessages(String msg, String topic, String sub, boolean async, int iterations, int batchSize, String subType) throws PulsarClientException {
         when(mockMessage.getData()).thenReturn(msg.getBytes());
         when(mockMessage.getTopicName()).thenReturn(topic);
@@ -154,11 +154,11 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, sub);
         runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, batchSize + "");
         runner.setProperty(ConsumePulsar.SUBSCRIPTION_TYPE, subType);
-
+        
         if (async) {
-            runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
+          runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
         } else {
-            runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
+          runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
         }
 
         runner.run(iterations, true);
@@ -170,28 +170,29 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).receive(0, TimeUnit.SECONDS);
 
         boolean shared = isSharedSubType(subType);
-
+        
         if (shared) {
-            if (async) {
-                verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledgeAsync(mockMessage);
-            } else {
-                verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledge(mockMessage);
-            }
-        } else {
-            if (async) {
-                verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulativeAsync(mockMessage);
-            } else {
-                verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulative(mockMessage);
-            }
+        	if (async) {
+        		verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledgeAsync(mockMessage);
+        	} else {
+        		verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledge(mockMessage);
+        	}
         }
-
+        else {
+        	if (async) {
+        		verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulativeAsync(mockMessage);
+        	} else {
+        		verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulative(mockMessage);
+        	}
+        }
+        
         return flowFiles;
     }
 
-    private static Message<GenericRecord> createTestMessage(byte[] data, String key, Map<String, String> props) {
+    private static Message<GenericRecord> createTestMessage(byte[] data, String key, Map<String, String> properties) {
         Message mockA = mock(Message.class);
         when(mockA.getData()).thenReturn(data);
-        props.entrySet().forEach(e ->
+        properties.entrySet().forEach(e ->
                 when(mockA.getProperty(e.getKey())).thenReturn(e.getValue())
         );
         when(mockA.getKey()).thenReturn(key);
@@ -222,28 +223,27 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_SUCCESS);
         assertEquals(3, flowFiles.size());
 
-        // first flow file should have A, second should have B
-        MockFlowFile flowFileWithA = flowFiles.get(0);
-        assertEquals("\"A\",\"10\"\n\"B\",\"10\"\n", flowFileWithA.getContent());
-        flowFileWithA.assertAttributeNotExists("prop");
-        flowFileWithA.assertAttributeNotExists("key");
+        // first flow file should have A and B (properties and key is the same)
+        flowFiles.get(0).assertContentEquals("\"A\",\"10\"\n\"B\",\"10\"\n");
+        flowFiles.get(0).assertAttributeNotExists("prop");
+        flowFiles.get(0).assertAttributeNotExists("key");
 
-        MockFlowFile flowFileWithC = flowFiles.get(1);
-        assertEquals("\"C\",\"10\"\n", flowFileWithC.getContent());
-        flowFileWithC.assertAttributeEquals("prop", "val");
-        flowFileWithC.assertAttributeNotExists("key");
+        //C is separate -> property changed
+        flowFiles.get(1).assertContentEquals("\"C\",\"10\"\n");
+        flowFiles.get(1).assertAttributeEquals("prop", "val");
+        flowFiles.get(1).assertAttributeNotExists("key");
 
-        MockFlowFile flowFileWithD = flowFiles.get(2);
-        assertEquals(flowFileWithD.getContent(), "\"D\",\"10\"\n");
-
-        flowFileWithD.assertAttributeEquals("prop", "val");
-        flowFileWithD.assertAttributeEquals("key", "K");
+        //D is separate -> key changed
+        flowFiles.get(2).assertContentEquals("\"D\",\"10\"\n");
+        flowFiles.get(2).assertAttributeEquals("prop", "val");
+        flowFiles.get(2).assertAttributeEquals("key", "K");
     }
 
-    //TODO multi-topic, multi-message with various attributes
+    //TODO multi-topic, multi-message with various properties
 
-    //TODO tests with various schemas: protobuf, json, avro - for avro: we should check if schema is extracted into a
-    //     property, the rest just should not blow up for now
+    //TODO tests with various schemas: protobuf, json, avro
+    //     for avro: we should check if schema is extracted into a property
+    //     the rest just should not blow up for now
 
     //TODO changing avro schema in the same topic, mixing attributes -> will be it grouped properly, and schema extracted properly?
 
