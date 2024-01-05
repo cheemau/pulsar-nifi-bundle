@@ -16,18 +16,7 @@
  */
 package org.apache.nifi.processors.pulsar.pubsub;
 
-import static org.apache.nifi.processors.pulsar.pubsub.ConsumePulsarRecord.RECORD_READER;
-import static org.apache.nifi.processors.pulsar.pubsub.ConsumePulsarRecord.RECORD_WRITER;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
+import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processors.pulsar.AbstractPulsarConsumerProcessor;
 import org.apache.nifi.processors.pulsar.AbstractPulsarProcessorTest;
 import org.apache.nifi.processors.pulsar.pubsub.mocks.MockRecordParser;
@@ -43,6 +32,17 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
+
+import static java.util.Collections.singletonMap;
+import static org.apache.nifi.processors.pulsar.pubsub.ConsumePulsarRecord.RECORD_READER;
+import static org.apache.nifi.processors.pulsar.pubsub.ConsumePulsarRecord.RECORD_WRITER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.*;
+
 public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]> {
 
     protected static String BAD_MSG = "Malformed message";
@@ -57,7 +57,7 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
     protected MockRecordWriter writerService;
 
     @SuppressWarnings("unchecked")
-	@Before
+    @Before
     public void setup() throws InitializationException {
 
         mockMessage = mock(Message.class);
@@ -127,7 +127,7 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
     	assertEquals(1, flowFiles.size());
     	flowFiles.get(0).assertContentEquals(msg + "***" + msg);
     }
-    
+
     protected List<MockFlowFile> sendMessages(String msg, boolean async, int iterations) throws PulsarClientException {
         return sendMessages(msg, DEFAULT_TOPIC, DEFAULT_SUB, async, iterations, 1);
     }
@@ -189,25 +189,25 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         return flowFiles;
     }
 
+    private static Message<GenericRecord> createTestMessage(byte[] data, String key, Map<String, String> properties) {
+        Message mockA = mock(Message.class);
+        when(mockA.getData()).thenReturn(data);
+        properties.entrySet().forEach(e ->
+                when(mockA.getProperty(e.getKey())).thenReturn(e.getValue())
+        );
+        when(mockA.getKey()).thenReturn(key);
+        return mockA;
+    }
+
     protected void doMappedAttributesTest() throws PulsarClientException {
-        when(mockMessage.getData()).thenReturn("A,10".getBytes())
-           .thenReturn("B,10".getBytes())
-           .thenReturn("C,10".getBytes())
-           .thenReturn("D,10".getBytes());
-        
-        when(mockMessage.getProperty("prop")).thenReturn(null)
-          .thenReturn(null)
-          .thenReturn("val")
-          .thenReturn("val");
-        
-        when(mockMessage.getKey()).thenReturn(null)
-          .thenReturn(null)
-          .thenReturn(null)
-          .thenReturn("K");
+        List<Message<GenericRecord>> mockMessages = new ArrayList<>();
+        mockMessages.add(createTestMessage("A,10".getBytes(), null, singletonMap("prop", null)));
+        mockMessages.add(createTestMessage("B,10".getBytes(), null, singletonMap("prop", null)));
+        mockMessages.add(createTestMessage("C,10".getBytes(), null, singletonMap("prop", "val")));
+        mockMessages.add(createTestMessage("D,10".getBytes(), "K", singletonMap("prop", "val")));
+        mockClientService.setMockMessages(mockMessages);
 
         when(mockMessage.getTopicName()).thenReturn("foo");
-        
-        mockClientService.setMockMessage(mockMessage);
 
         runner.setProperty(ConsumePulsar.MAPPED_FLOWFILE_ATTRIBUTES, "prop,key=__KEY__");
         runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, "4");
@@ -223,15 +223,29 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_SUCCESS);
         assertEquals(3, flowFiles.size());
 
-        // first flow file should have A, second should have B
+        // first flow file should have A and B (properties and key is the same)
+        flowFiles.get(0).assertContentEquals("\"A\",\"10\"\n\"B\",\"10\"\n");
         flowFiles.get(0).assertAttributeNotExists("prop");
         flowFiles.get(0).assertAttributeNotExists("key");
-        flowFiles.get(0).assertContentEquals("\"A\",\"10\"\n\"B\",\"10\"\n");
+
+        //C is separate -> property changed
+        flowFiles.get(1).assertContentEquals("\"C\",\"10\"\n");
         flowFiles.get(1).assertAttributeEquals("prop", "val");
         flowFiles.get(1).assertAttributeNotExists("key");
-        flowFiles.get(1).assertContentEquals("\"C\",\"10\"\n");
+
+        //D is separate -> key changed
+        flowFiles.get(2).assertContentEquals("\"D\",\"10\"\n");
         flowFiles.get(2).assertAttributeEquals("prop", "val");
         flowFiles.get(2).assertAttributeEquals("key", "K");
-        flowFiles.get(2).assertContentEquals("\"D\",\"10\"\n");
     }
+
+    //TODO multi-topic, multi-message with various properties
+
+    //TODO tests with various schemas: protobuf, json, avro
+    //     for avro: we should check if schema is extracted into a property
+    //     the rest just should not blow up for now
+
+    //TODO changing avro schema in the same topic, mixing attributes -> will be it grouped properly, and schema extracted properly?
+
+    //TODO check if an avroRecordSetWriter adds the schema properly to the start of the flowfile, so the flowfile is a valid avro file
 }
